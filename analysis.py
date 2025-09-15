@@ -6,7 +6,7 @@ import datetime
 #import enchant
 import io
 import json
-import moviepy.editor as mp
+import moviepy as mp
 import noisereduce as nr
 import numpy as np
 import openai
@@ -29,11 +29,11 @@ import urllib.request
 import vlc
 #from alive_progress import alive_bar
 from difflib import SequenceMatcher
-from google.cloud import vision
-from moviepy.editor import AudioFileClip
+#from google.cloud import vision
+from moviepy import AudioFileClip
 #from nltk.corpus import words
 from openai import RateLimitError, BadRequestError, InternalServerError, APITimeoutError
-from skimage.metrics import structural_similarity as ssim
+#from skimage.metrics import structural_similarity as ssim
 #from spellchecker import SpellChecker
 from tkinter import ttk
 from torch import hub
@@ -627,7 +627,7 @@ def generate_summary(audio_text,metadata,frames):
                     {"role": "assistant", "content": content},
                     {"role": "user", "content": [config['analysis']['chatgpt prompt']]}
                 ],
-                max_tokens=4096,
+                max_completion_tokens=4096,
             )
             break
         except RateLimitError as e:
@@ -651,7 +651,7 @@ def generate_summary(audio_text,metadata,frames):
 
                 retry_at = datetime.datetime.now() + datetime.timedelta(seconds=seconds_to_wait)
                 retry_at_str = retry_at.strftime('%H:%M:%S')
-                print("[INFO] Retrying at " + retry_at_str)
+                print("[INFO] Rate Limit Error, Retrying at " + retry_at_str)
                 time.sleep(seconds_to_wait)
 
             except Exception as e:
@@ -659,10 +659,11 @@ def generate_summary(audio_text,metadata,frames):
                 #print(error_message)
                 retry_at = datetime.datetime.now()+datetime.timedelta(minutes=15)
                 retry_at_str = retry_at.strftime('%H:%M:%S')
-                print("[INFO] Retrying at "+retry_at_str)
+                print("[INFO] Rate Limit Error. Retrying at "+retry_at_str)
                 time.sleep(900)
         except BadRequestError as e:
             error_message = e.message
+            print(f"[ERROR] {error_message}")
             match = re.search(r"'message': '(.*?)'", error_message)
             if match:
                 error_text = match.group(1)
@@ -675,18 +676,18 @@ def generate_summary(audio_text,metadata,frames):
                         content = [{"type": "text","text": video_context}]
                 retry_at = datetime.datetime.now()+datetime.timedelta(seconds=loops*loops)
                 retry_at_str = retry_at.strftime('%H:%M:%S')
-                print("[INFO] Retrying at "+retry_at_str)
+                print("[INFO] Bad Request Error. Retrying at "+retry_at_str)
                 time.sleep(loops*loops)
             else:
                 if loops <= 5:
                     retries = loops - 2
                     retry_at = datetime.datetime.now()+datetime.timedelta(seconds=retries*retries)
                     retry_at_str = retry_at.strftime('%H:%M:%S')
-                    print("[INFO] Retrying at "+retry_at_str)
+                    print("[INFO] Bad Request Error. Retrying at "+retry_at_str)
                     time.sleep(retries*retries)
                 else:
                     break
-        except (APITimeoutError, InternalServerError) as e:
+        except APITimeoutError as e:
             error_message = e.message
             match = re.search(r"'message': '(.*?)'", error_message)
             if match:
@@ -695,12 +696,28 @@ def generate_summary(audio_text,metadata,frames):
             if loops <= 6:
                 retry_at = datetime.datetime.now()+datetime.timedelta(seconds=loops*loops)
                 retry_at_str = retry_at.strftime('%H:%M:%S')
-                print("[INFO] Retrying at "+retry_at_str)
+                print("[INFO] API Timeout Error. Retrying at "+retry_at_str)
                 time.sleep(loops*loops)
             else:
                 break
-    #print(response)
-    finish_details = response.choices[0].finish_details['type']
+        except InternalServerError as e:
+            error_message = e.message
+            match = re.search(r"'message': '(.*?)'", error_message)
+            if match:
+                error_text = match.group(1)
+                print("[ERROR] "+ error_text)
+            if loops <= 6:
+                retry_at = datetime.datetime.now()+datetime.timedelta(seconds=loops*loops)
+                retry_at_str = retry_at.strftime('%H:%M:%S')
+                print("[INFO] Internal Server Error. Retrying at "+retry_at_str)
+                time.sleep(loops*loops)
+            else:
+                break
+    print(response)
+    try:
+        finish_details = response.choices[0].finish_details['type']
+    except AttributeError:
+        finish_details = response.choices[0].finish_reason
     summary = response.choices[0].message.content
     tokens_used = response.usage.total_tokens
     input_tokens = response.usage.prompt_tokens
@@ -763,6 +780,7 @@ def analyze_video(video_path,redirector,window=None):
     try:
         # Open the video file
         directory, video_file_name = os.path.split(video_path)
+        print(f"Opening {video_file_name}")
         # Get Metadata
         metadata = get_video_metadata(json_file, video_file_name)
         
@@ -805,7 +823,7 @@ def analyze_video(video_path,redirector,window=None):
         print("[INFO] Extracting audio from video using MoviePy")
         audio_file = os.path.join(scriptPath, f"{video_name}.wav")
         video_mp = mp.VideoFileClip(video_path)
-        video_mp.audio.write_audiofile(audio_file, verbose=False, logger=None)
+        video_mp.audio.write_audiofile(audio_file, logger=None)
         video_duration = video_mp.duration
         video_mp.close()
         wav_size = os.path.getsize(audio_file)
@@ -953,7 +971,7 @@ def analyze_video(video_path,redirector,window=None):
                 attempt += 1
                 print("[ACTION] Generating a summary using OpenAI")
                 summary, tokens_used, input_tokens, output_tokens, finish_details = generate_summary(audio_text.text, metadata, chosen_frames)
-                print("Summary generated with complete code: "+finish_details)
+                print("Summary generated with complete code: "+str(finish_details))
                 '''if finish_details == "stop":
                     print(summary)'''
                 print("Input Tokens Used: "+str(input_tokens),end='\n\n')
@@ -1071,6 +1089,8 @@ def analyze_video(video_path,redirector,window=None):
             clip_dict['Length (seconds)'] = video_duration
             clip_dict['Location'] = location
             clip_dict['Frame Range'] = [start_frame,end_frame]
+            if " " not in clip_dict['Title']:
+                clip_dict['Title'] = clip_dict['Title'].replace('-',' ')
 
             print("\nAdding metadata to file and renaming")
             metatagger.createMetadata(video_path, directory,clip_dict,outputFile=clip_dict['Filename'])

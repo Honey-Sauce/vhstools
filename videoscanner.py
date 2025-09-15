@@ -5,7 +5,7 @@ import imutils
 import io
 import json
 import math
-import moviepy.editor as mp
+import moviepy as mp
 import numpy as np
 import os
 import queue
@@ -87,6 +87,7 @@ def formatDuration(file):
     return lengthFormatted
 
 def getFrameRateDuration(file):
+    print(file)
     fileProbe = ffmpeg.probe(file)
     #print(fileProbe.keys())
     for key in list(fileProbe.keys()):
@@ -219,14 +220,14 @@ def process_frames(videoFile, totalFrames, frameRate, fileDuration, redirector):
     print("[INFO] Splitting audio track into "+str(len(breaks))+" files")
     for b in breaks:
         if a == 0:
-            clip_load = video_load.subclip(breaks[a] / frameRate, breaks[(a + 1)] / frameRate)
+            clip_load = video_load.subclipped(breaks[a] / frameRate, breaks[(a + 1)] / frameRate)
             audio_load = clip_load.audio
             audio_load.write_audiofile(temp_directory + delimeter + "temp" + str(a) + ".wav", logger="bar")
             audio = AudioSegment.from_file(temp_directory + delimeter + "temp" + str(a) + ".wav")
             audio_chunks = make_chunks(audio, frame_duration)
             os.remove(temp_directory + delimeter + "temp" + str(a) + ".wav")
         elif breaks[a] != breaks[-1]:
-            clip_load = video_load.subclip((breaks[a] + 1) / frameRate, breaks[a + 1] / frameRate)
+            clip_load = video_load.subclipped((breaks[a] + 1) / frameRate, breaks[a + 1] / frameRate)
             audio_load = clip_load.audio
             audio_load.write_audiofile(temp_directory + delimeter + "temp" + str(a) + ".wav", logger="bar")
             audio = AudioSegment.from_file(temp_directory + delimeter + "temp" + str(a) + ".wav")
@@ -234,7 +235,7 @@ def process_frames(videoFile, totalFrames, frameRate, fileDuration, redirector):
             os.remove(temp_directory + delimeter + "temp" + str(a) + ".wav")
         elif breaks[a] == breaks[-1] and breaks[a] < totalFrames:
             try:
-                clip_load = video_load.subclip((breaks[a] + 1) / frameRate, ms_duration / 1000)
+                clip_load = video_load.subclipped((breaks[a] + 1) / frameRate, ms_duration / 1000)
                 audio_load = clip_load.audio
                 audio_load.write_audiofile(temp_directory + delimeter + "temp" + str(a) + ".wav", logger="bar")
                 audio = AudioSegment.from_file(temp_directory + delimeter + "temp" + str(a) + ".wav")

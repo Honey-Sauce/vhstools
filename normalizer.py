@@ -1,6 +1,6 @@
 import ffmpeg
 import os
-from moviepy.editor import VideoFileClip
+from moviepy import VideoFileClip
 from moviepy.audio.fx.all import audio_normalize
 
 def normalize_audio(video_path, output_path=None):

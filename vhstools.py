@@ -28,6 +28,7 @@ tv_ico = os.path.join(scriptPath,'tv.ico')
 config = configparser.ConfigParser()
 config.read(os.path.join(scriptPath,'config.ini'))
 json_file = config['directories']['json file']
+video_directory = config['directories']['video directory']
 
 class VideoPlayer(tk.Frame):
     def __init__(self, master=None, media_path=None):
@@ -232,6 +233,14 @@ class TextRedirector(io.TextIOBase):
                 return
             self.action_label.config(text=s.strip().replace("MoviePy - ","").replace("[ACTION] ",""))
             return
+        elif s.lstrip().startswith("Moviepy") or s.lstrip().startswith("[ACTION]"):
+            if "Moviepy" and "Done" in s.lstrip():
+                self.progress_widget['value'] = self.progress_widget['maximum']
+                self.progress_var.set(self.progress_widget['maximum'])
+                self.progress_widget.update()
+                return
+            self.action_label.config(text=s.strip().replace("Moviepy - ","").replace("[ACTION] ",""))
+            return
         elif s.lstrip().startswith("uploading "):
             self.progress_widget['maximum'] = 100
             self.update_progress_ia(s)
@@ -358,8 +367,8 @@ def launch_scanner(file=None,directory=None,redirector=None):
     import videoscanner
     
     print(": ___  __              ___     __   __                  ___  __  ::")
-    print(":|__  |__)  /\   |\/| |__     /__` /  `  /\  |\ | |\ | |__  |__) ::")
-    print(":|    |  \ /~~\  |  | |___    .__/ \__, /~~\ | \| | \| |___ |  \ ::")
+    print(":|__  |__)  /\\   |\\/| |__     /__` /  `  /\\  |\\ | |\\ | |__  |__) ::")
+    print(":|    |  \\ /~~\\  |  | |___    .__/ \\__, /~~\\ | \\| | \\| |___ |  \\ ::")
     print(":::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::")
     starting_time = datetime.datetime.now()
     if file != None:
@@ -547,6 +556,35 @@ def launch_identifier(file=None,directory=None,redirector=None,window=None):
     else: 
         print(f"Complete in {int(time_minutes):d} minutes, {int(time_seconds):d} seconds")
 
+def launch_resplit(json_path, base_directory=video_directory, redirector=None):
+    import editor
+    print(" ██▀███  ▓█████   ██████  ██▓███   ██▓     ██▓▄▄▄█████▓")
+    print("▓██ ▒ ██▒▓█   ▀ ▒██    ▒ ▓██░  ██▒▓██▒    ▓██▒▓  ██▒ ▓▒")
+    print("▓██ ░▄█ ▒▒███   ░ ▓██▄   ▓██░ ██▓▒▒██░    ▒██▒▒ ▓██░ ▒░")
+    print("▒██▀▀█▄  ▒▓█  ▄   ▒   ██▒▒██▄█▓▒ ▒▒██░    ░██░░ ▓██▓ ░ ")
+    print("░██▓ ▒██▒░▒████▒▒██████▒▒▒██▒ ░  ░░██████▒░██░  ▒██▒ ░ ")
+    print("░ ▒▓ ░▒▓░░░ ▒░ ░▒ ▒▓▒ ▒ ░▒▓▒░ ░  ░░ ▒░▓  ░░▓    ▒ ░░   ")
+    print("  ░▒ ░ ▒░ ░ ░  ░░ ░▒  ░ ░░▒ ░     ░ ░ ▒  ░ ▒ ░    ░    ")
+    print("  ░░   ░    ░   ░  ░  ░  ░░         ░ ░    ▒ ░  ░      ")
+    print("   ░        ░  ░      ░               ░  ░ ░           ")
+    editor.split_from_json(json_path, base_directory, redirector)
+
+def launch_json2xml(json_path):
+    import metatagger
+    print(" 88888 .dP\"Y8  dP\"Yb  88b 88 oP\"Yb. Yb  dP 8b    d8 88     ")
+    print("    88 `Ybo.\" dP   Yb 88Yb88 \"' dP'  YbdP  88b  d88 88     ")
+    print("o.  88 o.`Y8b Yb   dP 88 Y88   dP'   dPYb  88YbdP88 88  .o ")
+    print("\"bodP' 8bodP'  YbodP  88  Y8 .d8888 dP  Yb 88 YY 88 88ood8 ")
+    starting_time = datetime.datetime.now()
+    metatagger.nfo_from_json(json_path)
+    ending_time = datetime.datetime.now()
+    elapsed_time = ending_time - starting_time
+    total_seconds = elapsed_time.total_seconds()
+    time_hours = total_seconds // 3600
+    time_minutes = (total_seconds % 3600) // 60
+    time_seconds = total_seconds % 60
+    messagebox.showinfo("COMPLETE!", f"JSON2XML Complete in {int(time_minutes):d} minutes, {int(time_seconds):d} seconds",icon=messagebox.INFO)
+
 def launch_archiver(file=None,directory=None,redirector=None,is_video=False,is_clip=False,clip_json_file=None):
     import iauploader
     print("::::::: █████╗ ██████╗  ██████╗██╗  ██╗██╗██╗   ██╗███████╗::::::::")
@@ -691,7 +729,7 @@ def launch_json_editor(file=None, tape_id=None, progress_label=None, progress_wi
     except Exception as e:
         print(e)
 
-def launch_editor(file=None,directory=None):
+def launch_editor(file=None,directory=None,redirector=None):
     import editor
     print("::::::                $$\ $$\   $$\                         :::::::")
     print("::::::                $$ |\__|  $$ |                        :::::::")
@@ -866,6 +904,16 @@ def on_archiver_select(option,script="Archiver"):
         json_file_label_var.set('Data File:')
         is_clip = True
         is_video = False
+        
+def on_resplit_select(option,script="Resplit"):
+    file_menu.entryconfig("Open File...", state=tk.DISABLED)
+    file_menu.entryconfig("Open Clip Data File...", state=tk.NORMAL)
+    json_file_entry.config(state=tk.NORMAL)
+    selected_script_label.config(text=script)
+    json_file_selection.set('Use the File menu to open the corresponding clip data file')
+    json_file_label_var.set('Data File:')
+    label_label.config(text="Directory:")
+    selected_file_label.config(text="Use the File menu to choose a file to process.")
 
 def on_youtuber_select(option,script="YouTube Uploader"):
     global is_clip
@@ -952,7 +1000,17 @@ def update_button_state(*args):
     global directory_button
     selected_option = selected_script.get()
     selected_script_label.config(text=selected_option)
-    if selected_option != "SELECT OPERATION":
+    if selected_option == "Resplit" or "NFO Generator":
+        file_menu.entryconfig("Open Clip Data File...", state=tk.NORMAL)
+        json_file_selection.set('Use the File menu to open the clip data file.')
+        json_file_entry.config(state=tk.NORMAL)
+        json_file_label_var.set('Data File:')
+        label_label.config(text="")
+        selected_file_label.config(text="")
+        launch_button.config(state=tk.NORMAL)
+        if selected_option == "Resplit":
+            file_menu.entryconfig("Open Directory...", state=tk.NORMAL)
+    elif selected_option != "SELECT OPERATION":
         #filename_button.config(state=tk.NORMAL)
         file_menu.entryconfig("Open File...", state=tk.NORMAL)
         #directory_button.config(state=tk.NORMAL)
@@ -1273,6 +1331,18 @@ def launch_script(selected_script,output_text,redirector,window=None):
     elif selected_script == "Archiver":
         try:
             thread = threading.Thread(target=launch_archiver, args=(selected_filename, selected_directory, redirector, is_video, is_clip, json_file_selection.get()))  # Pass the variables here
+            thread.start()
+        except Exception as e:
+            print(e)
+    elif selected_script == "Resplit":
+        try:
+            thread = threading.Thread(target=launch_resplit, args=(json_file_selection.get(),selected_directory,redirector,))  # Pass the variables here
+            thread.start()
+        except Exception as e:
+            print(e)
+    elif selected_script == "NFO Generator":
+        try:
+            thread = threading.Thread(target=launch_json2xml, args=(json_file_selection.get(),))  # Pass the variables here
             thread.start()
         except Exception as e:
             print(e)
@@ -2228,13 +2298,27 @@ else:
         segment_end = entry_data["Segment End"]
         order_on_tape = str(entry_data["Order on Tape"])
 
+        # Convert H:MM:SS strings to datetime objects for manipulation
+        segment_start_time = datetime.datetime.strptime(segment_start, "%H:%M:%S")
+        segment_end_time = datetime.datetime.strptime(segment_end, "%H:%M:%S")
+
+        # Increment the datetime objects (example: by 2 seconds)
+        segment_start_time += datetime.timedelta(seconds=2)
+        segment_end_time -= datetime.timedelta(seconds=2)
+
+        # Convert back to H:MM:SS format
+        updated_segment_start = segment_start_time.strftime("%H:%M:%S")
+        updated_segment_end = segment_end_time.strftime("%H:%M:%S")
+
         for entry in data:
             if entry["Tape_ID"] == tape_id and entry["ID"] != entry_data["ID"]:
                 if str(entry["Order on Tape"]) == order_on_tape:
                     validation_errors.append("Duplicate Order on Tape value with Tape ID: {}".format(tape_id))
                     break
                 else:
-                    if entry["Segment End"] > segment_start and entry["Segment Start"] < segment_end:
+                    entry_segment_start = datetime.datetime.strptime(entry["Segment Start"],"%H:%M:%S")
+                    entry_segment_end = datetime.datetime.strptime(entry["Segment End"],"%H:%M:%S")
+                    if entry_segment_end  > segment_start_time and entry_segment_start < segment_end_time:
                         validation_errors.append("Overlap in segment times with Tape ID: {}".format(tape_id))
                         break
 
@@ -2620,6 +2704,8 @@ else:
         "Identifier": [],
         "Archiver": ["Video","Clip"],
         "YouTube Uploader": ["Video","Clip"],
+        "Resplit": [],
+        "NFO Generator": [],
     }
 
     # Create a text box to display the output
@@ -2678,7 +2764,7 @@ else:
     
     checkboxes = []
     selection_var = tk.StringVar(value="file")
-    file_menu.add_command(label="Open File...", command=select_file, state=tk.DISABLED)
+    file_menu.add_command(label="Open File...", command=select_file)
     filename_var = tk.StringVar()
     
     descriptions = {}
@@ -2688,9 +2774,11 @@ else:
     descriptions["Identifier"] = "Identifies video clip content using AI tools and context from the Tape Data"
     descriptions["Archiver"] = "Upload a full digitized file or clip to the Internet Archive"
     descriptions["YouTube Uploader"] = "Upload a full digitized file or clip to YouTube."
+    descriptions["Resplit"] = "Re-cut the indicated video clips from a clips JSON file."
+    descriptions["NFO Generator"] = "Create Kodi compliant NFO files from JSON data."
     
     directory_var = tk.StringVar()
-    file_menu.add_command(label="Open Directory...", command=choose_directory, state=tk.DISABLED)
+    file_menu.add_command(label="Open Directory...", command=choose_directory, state=tk.NORMAL)
 
     file_menu.add_command(label="Open Clip Data File...", command=lambda: browse_file(json_file_selection), state=tk.DISABLED)
     

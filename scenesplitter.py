@@ -12,7 +12,7 @@ import time
 import tkinter as tk
 import videoscanner
 #from alive_progress import alive_bar
-from webcolors import CSS3_HEX_TO_NAMES, hex_to_rgb
+#from webcolors import CSS3_HEX_TO_NAMES, hex_to_rgb
 
 if os.name == 'nt':
     delimeter = '\\'
@@ -30,12 +30,12 @@ split_colors = ['black','darkslategray']
 audio_change_threshold = int(config['scenesplitter']['audio change threshold'])
 
 #getting rgb color name database
-css3_db = CSS3_HEX_TO_NAMES
+#css3_db = CSS3_HEX_TO_NAMES
 names = []
 rgb_values = []
-color_map = {}
+'''color_map = {}
 for color_hex, color_name in css3_db.items():
-    color_map[color_name] = color_hex
+    color_map[color_name] = color_hex'''
 
 try:
 	if (sys.argv[1] == "--debug"):
@@ -49,7 +49,7 @@ def rgbFromStr(s):
     r,g,b = int(s[1:3],16), int(s[3:5], 16),int(s[5:7], 16)
     return r,g,b
 
-def nearestColorName(R,G,B,color_map=color_map):
+'''def nearestColorName(R,G,B,color_map=color_map):
     mindiff = None
     for d in color_map:
         r,g,b = rgbFromStr(color_map[d])
@@ -57,7 +57,7 @@ def nearestColorName(R,G,B,color_map=color_map):
         if mindiff is None or diff < mindiff:
             mindiff = diff
             mincolorname = d
-    return mincolorname
+    return mincolorname'''
 
 def line(): #get line number
 	line = inspect.currentframe().f_back.f_lineno
@@ -332,7 +332,7 @@ def processTempFile(file, horizontalResolution, verticalResolution, aspectRatio,
     )
     return outputFileName
 
-def saveSplitScene(scene, file, path, startSplit, endSplit, frameRate):
+def saveSplitScene(scene, file, path, startSplit, endSplit, frameRate, crf=11):
     sceneNumber = "{0:0=5d}".format(scene)
 
     tape_directory, tape_filename = os.path.split(file)
@@ -351,7 +351,8 @@ def saveSplitScene(scene, file, path, startSplit, endSplit, frameRate):
         (
             ffmpeg
             .input(file, ss=startSplit/frameRate, to=endSplit/frameRate)
-            .output(os.path.join(path,outputFileName), vcodec='copy', loglevel="error", acodec='copy')
+            #.output(os.path.join(path,outputFileName), vcodec='copy', loglevel="error", acodec='copy', force_key_frames=f"{startSplit/frameRate}"))
+            .output(os.path.join(path, outputFileName), vcodec='libx264', acodec='copy', loglevel="error", crf=crf, force_key_frames=f"0,{startSplit/frameRate}")
             .run()
         )
     except ffmpeg.Error as e:

@@ -10,7 +10,7 @@ from internetarchive import ArchiveSession, upload
 from requests.exceptions import HTTPError
 
 if os.name == 'nt':
-    delimeter = '\\'
+    delimeter = '/'
 else:
     delimeter = '/'
 scriptPath = os.path.realpath(os.path.dirname(__file__))
@@ -71,10 +71,9 @@ def uploadToArchive(files):
         directorypath = selectDirectory()
         #add file selection code
     if len(files)==1:
-        tape_name = files[0].split(delimeter)[-1]
-        tape_name = tape_name.split('.')[0][0:7]
+        tape_name = os.path.splitext(os.path.basename(files[0]))[0]
     elif len(files)>1:
-        tape_name = file.split(delimeter)[-2]
+        tape_name = os.path.basename(os.path.dirname(files[0]))
     
     j = open(vhs_json_file,)
     tapeData = json.load(j)
@@ -264,11 +263,11 @@ def uploadClipToArchive(file,clip_json_file,redirector=None):
                 completed_tasks_count += 1
 
         #print(f"{completed_tasks_count} of {len(tasks)} tasks completed.")
-        if completed_tasks_count >= len(tasks) / 2:
-            print(f"[INFO] At least half of the tasks are completed. Moving on.")
+        if completed_tasks_count >= len(tasks) * .75:
+            print(f"[INFO] Tasks are completed. Moving on.")
             break
         sleep_time_seconds = int(config['internet archive']['task check interval'])       
-        print(f"[ACTION] {completed_tasks_count} of {len(tasks)} tasks completed. Waiting for at least half to complete...")
+        print(f"[ACTION] {completed_tasks_count} of {len(tasks)} tasks completed. Waiting tasks to complete...")
         seconds_waited = 0
         if redirector:
             while seconds_waited < sleep_time_seconds:

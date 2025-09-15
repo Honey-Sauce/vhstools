@@ -4,12 +4,17 @@ import inspect
 import json
 import os
 import sys
+import time
+import tkinter as tk
+from moviepy import VideoFileClip
 
 if os.name == 'nt':
     delimeter = '\\'
 else:
     delimeter = '/'
-    
+
+progress_var = tk.IntVar()
+
 try:
 	if (sys.argv[1] == "--debug"):
 		lineEnd = "\n"
@@ -31,6 +36,33 @@ def textline(line,text,endLine=lineEnd): #print to terminal including timestamp 
 		clearline()
 	print(datetime.datetime.now().strftime("%H:%M:%S")+": "+str(line)+" - " + text,end=endLine)
 
+def get_eta(start_time,f,total_frames):
+    seconds_elapsed = time.time() - start_time
+    elapsed_minutes, elapsed_seconds = divmod(seconds_elapsed, 60)
+    elapsed_hours, elapsed_minutes = divmod(elapsed_minutes, 60)
+    if elapsed_hours > 0:
+        time_elapsed = "{:02d}:{:02d}:{:02d}".format(round(elapsed_hours), round(elapsed_minutes), round(elapsed_seconds))
+    else:
+        time_elapsed = "{:02d}:{:02d}".format(round(elapsed_minutes), round(elapsed_seconds))    
+    
+    frames_per_second = f / seconds_elapsed
+    remaining_frames = total_frames - f
+    
+    if frames_per_second > 0:
+        remaining_time = remaining_frames / frames_per_second
+    else:
+        remaining_time = 0
+    
+    minutes, seconds = divmod(remaining_time, 60)
+    hours, minutes = divmod(minutes, 60)
+
+    if hours > 0:
+        time_remaining = "{:02d}:{:02d}:{:02d}".format(round(hours), round(minutes), round(seconds))
+    else:
+        time_remaining = "{:02d}:{:02d}".format(round(minutes), round(seconds))
+
+    return time_elapsed, frames_per_second, time_remaining
+
 def convert(seconds): 
     min, sec = divmod(seconds, 60) 
     hour, min = divmod(min, 60) 
@@ -51,6 +83,20 @@ def selectFile(k):
         except ValueError:
             fileSelection = k
     return fileSelection
+
+def progress(progress_widget,frames_processed,batch_size,progress_label,progress_list,progress_var):
+    if progress_widget is not None and frames_processed % batch_size == 0:
+        time_elapsed, frames_per_second, time_remaining = progress_list
+        #print(frames_processed)
+        #print(progress_widget['maximum'])
+        percentage_complete = round((frames_processed/progress_widget['maximum'])*100)
+        #print(percentage_complete)
+        frames_per_second = "{:.2f}".format(frames_per_second)
+        
+        progress_label.config(text=str(percentage_complete)+'% '+str(frames_processed)+'/'+str(progress_widget['maximum'])+', '+str(time_elapsed)+'<'+time_remaining+', '+ str(frames_per_second+'/s'))
+        #progress_widget.configure(value=frames_processed)
+        progress_var.set(frames_processed)
+        progress_widget.update()
 
 def formatDuration(file):
     fileProbe = ffmpeg.probe(file)
@@ -164,8 +210,11 @@ def selectVideoFile(path, ext):
     print("CONFIRMED!")
     return dirDict[fileSelection]
 
-def splitVideo(entry,startSplit,endSplit,outputName,path):
+def splitVideo(entry,startSplit,endSplit,outputName,path,crf=11):
     prevOutputName = ""
+    frameRate = getFrameRate(entry)
+    if frameRate == 0 or frameRate is None:
+        frameRate = 30
     filename = os.path.join(path,entry)
     #do the split
     print("Creating "+outputName+" from "+entry)
@@ -173,12 +222,13 @@ def splitVideo(entry,startSplit,endSplit,outputName,path):
         (
             ffmpeg
             .input(filename, ss=startSplit, to=endSplit)
-            .output(os.path.join(path,outputName), c='copy', loglevel="error")
+            #.output(os.path.join(path,outputName), c='copy', loglevel="error", force_key_frames=startSplit)
+            .output(os.path.join(path, outputName), vcodec='libx264', acodec='copy', crf=crf, force_key_frames=f"0,{startSplit/frameRate}")
             .run(quiet=True, capture_stderr=True)
         )
     except Exception as e:
         print("[ERROR] ffmpeg command failed with the following error:")
-        print(e.stderr.decode('utf-8'))
+        print(e)
         return        
     x = 1
     prevOutputName = ""
@@ -292,3 +342,64 @@ def processJSON(JSONfile=None, path=None):
             processVideo(d['input'],d['inTime'],d['outTime'],d['regions'],d['intro'],d['endscreens'],d['startEndscreen'],d['xAxisRating'],d['yAxisRating'],d['endRating'],d['startIntro'],d['endIntro'],d['videoFadeIn'],d['videoFadeOut'],d['audioFadeIn'],d['audioFadeOut'],d['output'])
     except:
         pass
+        
+def split_from_json(json_path, base_directory=None, redirector=None, crf=11):
+    print("[ACTION] Saving Clips from JSON Data")
+    time.sleep(1)
+    base_file = None
+    json_directory = os.path.dirname(json_path)
+    if not base_directory:
+        base_directory = os.path.dirname(json_directory)
+        #base_directory = json_directory
+    #print(base_directory)
+    with open(json_path, 'r', encoding='utf-8') as file:
+        json_array = json.load(file)
+    start_time = time.time()
+    redirector.progress_widget['maximum'] = len(json_array)
+    for i, json_data in enumerate(json_array):
+        output_filename = json_data['Filename']
+        base_name = json_data['Tape ID']
+        in_frame = json_data['Frame Range'][0]
+        out_frame = json_data['Frame Range'][1]
+        video_extensions = ['.mp4', '.mkv', '.avi', '.mov', '.wmv', '.flv']
+        print(f"[ACTION] Processing {output_filename}")
+        for file_name in os.listdir(base_directory):
+            if file_name.startswith(base_name):
+                _,file_extension = os.path.splitext(file_name)
+                if file_extension.lower() in video_extensions:
+                    base_file = os.path.join(base_directory, file_name)
+                    #print(base_file)
+        
+        if base_file is not None:
+            clip = VideoFileClip(base_file)
+            frame_rate = clip.fps
+            clip.close()
+            
+            try:
+                (
+                    ffmpeg
+                    .input(base_file, ss=in_frame/frame_rate, to=out_frame/frame_rate)
+                    .output(
+                        os.path.join(json_directory,output_filename), 
+                        loglevel="info", 
+                        vcodec='libx264',
+                        acodec='copy',
+                        crf=crf,
+                        force_key_frames=f"0,{in_frame/frame_rate}",
+                        **{
+                            'metadata:g:0':"title="+json_data['Title'],
+                            'metadata:g:1':"date="+json_data['Air Date'],
+                            'metadata:g:2':"genre="+json_data['Tags'],
+                            'metadata:g:3':"network="+json_data['Network/Station'],
+                            'metadata:g:4':"synopsis="+json_data['Description']+'\n'+json_data['Location']+'\n'+json_data['Tape ID'],
+                            'metadata:g:5':"episode_id="+str(json_data['Frame Range'][0]),
+                            'metadata:g:6':"comment="+json_data['Location']+'\n'+json_data['Description'],
+                        }
+                    )
+                    .run(overwrite_output=True)
+                )
+                progress_list = get_eta(start_time,i+1,len(json_array))
+                progress(redirector.progress_widget,i+1,1,redirector.progress_label,progress_list,redirector.progress_var)
+            except:
+                print(f"[ERROR] ffmpeg command failed with an unknown error")
+        print("[ACTION] Processing Complete!")
